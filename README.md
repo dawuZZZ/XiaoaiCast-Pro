@@ -446,23 +446,7 @@ NanoHTTPD 的 `DefaultAsyncRunner` 是**每个请求开一个线程**。所以�
 
 ---
 
-## 十二、界面截图（真机实测）
-
-| 主界面 | 音箱列表 |
-|---|---|
-| ![主界面](docs/screenshots/01-home.png) | ![音箱列表](docs/screenshots/04-devices.png) |
-
-| 账号 | 设置 |
-|---|---|
-| ![账号](docs/screenshots/02-account.png) | ![设置](docs/screenshots/03-settings.png) |
-
-| 扫码登录（二维码按屏幕宽度铺满，方便扫） |
-|---|
-| ![扫码登录](docs/screenshots/05-qr-login.png) |
-
----
-
-## 十三、已知限制
+## 十二、已知限制
 
 | 限制 | 说明 |
 |---|---|
@@ -476,7 +460,7 @@ NanoHTTPD 的 `DefaultAsyncRunner` 是**每个请求开一个线程**。所以�
 
 ---
 
-## 十四、免责声明
+## 十三、免责声明
 
 - 本项目**仅供个人学习与自用**，不得用于任何商业用途。
 - 控制音箱需要向小米云提交账号凭据（密码或 passToken）。**请勿使用绑定摄像头等敏感设备的账号**，
