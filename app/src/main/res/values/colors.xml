@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#1D6FE0</color>
+    <color name="brand">#1D6FE0</color>
+    <color name="brand_weak">#E8F0FD</color>
+    <color name="log_bg">#F4F6F8</color>
+
+    <!-- 引导清单三种状态 -->
+    <color name="step_done">#12B76A</color>
+    <color name="step_doing">#F79009</color>
+    <color name="step_todo">#98A2B3</color>
+
+    <!-- 自检结果 -->
+    <color name="diag_ok">#12B76A</color>
+    <color name="diag_warn">#F79009</color>
+    <color name="diag_fail">#F04438</color>
+</resources>
