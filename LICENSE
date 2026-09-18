@@ -1,0 +1,39 @@
+MIT License
+
+Copyright (c) 2026 XiaoAiCast contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+第三方组件声明 / Third-party notices
+
+1. NanoHTTPD (app/src/main/java/fi/iki/elonen/NanoHTTPD.java)
+   - 来源: https://github.com/NanoHttpd/nanohttpd  (2.3.1 单文件核心)
+   - 许可: BSD-3-Clause，文件头保留原始版权声明
+   - 修改: 给 NanoHTTPD.Method 枚举补上 SUBSCRIBE / UNSUBSCRIBE / NOTIFY
+
+2. UPnP 服务描述 XML (app/src/main/res/raw/*.xml) 与协议模板
+   - 来源: MiAir  https://github.com/KiriChen-Wind/MiAir  (MIT)
+   - 用途: DLNA 设备描述 / SOAP 报文 / GENA 事件格式
+
+3. 小米账号认证与 MiNA 接口实现思路
+   - 来源: miservice  https://github.com/yihong0618/miservice  (MIT)
+   - 来源: XiaoMusic  https://github.com/hanxi/xiaomusic  (MIT)
+   - 用途: 认证流程、ubus 调用约定、播放接口参数、机型差异经验

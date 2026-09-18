@@ -1,0 +1,13 @@
+# 统一换行符，避免 Windows 下提交出现整文件 diff
+* text=auto eol=lf
+
+# Windows 脚本必须保持 CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制
+*.jar binary
+*.jks binary
+*.apk binary
+*.png binary
+*.webp binary

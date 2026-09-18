@@ -1,0 +1,117 @@
+<resources>
+    <string name="app_name">小爱DLNA</string>
+    <string name="app_desc">把手机音乐 App 的投屏指令转成小爱音箱听得懂的话。无需 NAS、无需 root。</string>
+
+    <!-- ============ 状态卡 ============ -->
+    <string name="card_status">运行状态</string>
+    <string name="status_running">运行中</string>
+    <string name="status_stopped">未启动</string>
+    <string name="status_url_empty">服务未启动时没有地址</string>
+    <string name="status_ssdp_ready">SSDP：已就绪（音乐 App 能发现设备）</string>
+    <string name="status_ssdp_off">SSDP：未就绪</string>
+    <string name="status_nothing_playing">— 当前无播放</string>
+    <string name="status_playing">▶ %1$s · 音量 %2$d</string>
+    <string name="btn_copy_url">复制地址</string>
+    <string name="toast_copied">已复制到剪贴板</string>
+
+    <!-- ============ 步骤清单 ============ -->
+    <string name="guide_title">使用步骤</string>
+    <string name="guide_progress">已完成 %1$d / %2$d</string>
+    <string name="guide_hint">照这个顺序做就行，点每一步右边的按钮可以直接跳过去</string>
+    <string name="guide_expand">展开</string>
+    <string name="guide_collapse">收起</string>
+
+    <!-- ============ 账号 ============ -->
+    <string name="sec_account">① 小米账号</string>
+    <string name="hint_user_id">小米 ID（userId，一串数字）</string>
+    <string name="hint_pass_token">passToken（很长的一串字符）</string>
+    <string name="hint_account">小米账号（手机号 / 邮箱 / 小米 ID）</string>
+    <string name="hint_password">密码</string>
+    <string name="hint_token_help">passToken 怎么拿：点下面的「打开小米登录页」在浏览器登录，然后从开发者工具 Application → Cookies 里复制 passToken 的值；或者直接把整段 Cookie 复制出来，点「粘贴并解析」，我会自动拆出 userId 和 passToken。这种方式不触发验证码，比密码稳。</string>
+    <string name="hint_password_help">密码方式最直接，但小米风控偶尔会要求人机验证。如果登录失败提示 70016 / 87001，请切到上面的 passToken 方式。</string>
+    <string name="btn_login">登录小米账号</string>
+    <string name="btn_open_mi_login">打开小米登录页</string>
+    <string name="btn_paste_cookie">粘贴并解析 Cookie</string>
+    <string name="toast_cookie_parsed">已识别 userId=%1$s，passToken 长度 %2$d</string>
+    <string name="toast_cookie_fail">剪贴板里没找到 userId / passToken，请确认复制的是小米的 Cookie</string>
+    <string name="toast_clip_empty">剪贴板是空的</string>
+    <string name="toast_need_login_first">请先点「登录小米账号」</string>
+    <string name="token_cache_ok">已缓存登录凭据，可直接启动服务</string>
+    <string name="token_cache_none">还没有有效凭据，请先登录</string>
+
+    <!-- ============ 音箱 ============ -->
+    <string name="sec_device">② 选择音箱</string>
+    <string name="btn_refresh_devices">刷新音箱列表</string>
+    <string name="hint_device">点上面的按钮后在这里选你的小爱音箱</string>
+    <string name="btn_test_tts">测试链路（让音箱说句话）</string>
+    <string name="toast_tts_sent">指令已发出，音箱应该会说话；听不到请先调大音箱音量</string>
+    <string name="toast_tts_failed">测试失败，看下面的日志</string>
+    <string name="tts_text">小爱DLNA 已连接，可以投屏了</string>
+
+    <!-- ============ 服务 ============ -->
+    <string name="sec_service">③ 投屏服务</string>
+    <string name="sec_advanced">高级设置</string>
+    <string name="hint_port">服务端口（默认 8300，被占用就换 8301）</string>
+    <string name="hint_fake_name">伪装成的设备名（音乐 App 列表里显示的）</string>
+    <string name="hint_volume">启动时把音箱音量设为（0 = 不改动）</string>
+    <string name="hint_url_type">备用接口 player_play_url 的 type（不懂就别改）</string>
+    <string name="btn_start">启动投屏服务</string>
+    <string name="btn_stop">停止投屏服务</string>
+    <string name="btn_stop_playback">停止播放</string>
+    <string name="btn_battery">忽略电池优化（保活必点）</string>
+    <string name="cb_proxy">音频流经手机代理转发（推荐，兼容性更好）</string>
+    <string name="cb_music_api">使用 player_play_music 接口（L05B / L05C / LX05 等机型必选）</string>
+    <string name="cb_light">请求点亮「正在播放」指示灯</string>
+    <string name="btn_reset_udn">重置设备身份（UDN）</string>
+    <string name="toast_udn_reset">已重置，下次启动服务会被音乐 App 当成新设备重新发现</string>
+    <string name="toast_stop_service_first">请先停止投屏服务再改端口</string>
+    <string name="err_port_invalid">端口要在 1024 - 65535 之间</string>
+    <string name="err_need_device">请先刷新并选择一台音箱</string>
+
+    <!-- ============ 自检 ============ -->
+    <string name="sec_diag">④ 自检与诊断</string>
+    <string name="diag_hint">不确定哪里出问题就先点这个：一次性检查权限、网络、账号、端口、音箱在线状态。</string>
+    <string name="btn_self_check">一键自检</string>
+    <string name="diag_running">正在自检…（会向音箱问一次状态，约 2 秒）</string>
+
+    <!-- ============ 日志 ============ -->
+    <string name="sec_log">运行日志</string>
+    <string name="btn_copy_log">复制</string>
+    <string name="btn_export_log">导出分享</string>
+    <string name="btn_clear_log">清空</string>
+    <string name="toast_export_failed">导出失败，看日志</string>
+
+    <!-- ============ 通知 ============ -->
+    <string name="notif_channel_name">投屏服务</string>
+    <string name="notif_title">小爱DLNA 运行中</string>
+    <string name="notif_text">DLNA 渲染器已就绪，去音乐 App 里投屏吧</string>
+
+    <!-- ============ 使用指引 ============ -->
+    <string name="guide_dialog_title">怎么投屏</string>
+    <string name="guide_dialog_body">以网易云音乐为例：\n\n1. 打开网易云音乐，正常播放一首歌\n2. 点播放页右上角的「投屏」图标\n3. 设备列表里会出现「%1$s」，选中它\n4. 声音就会从音箱出来，手机可以锁屏\n\nQQ音乐同理，找「QPlay / 投屏」按钮。\n\n找不到设备时：先点「一键自检」，重点看 Wi-Fi 和 SSDP 两项。</string>
+
+    <!-- ============ 扫码登录 ============ -->
+    <string name="btn_qr_login">扫码登录（推荐·不触发验证码）</string>
+    <string name="qr_title">扫码登录小米账号</string>
+    <string name="qr_hint">用「米家」App 扫描二维码并确认。确认后会自动填入凭据并登录。</string>
+    <string name="qr_loading">正在获取二维码…</string>
+    <string name="qr_waiting">等待扫码…</string>
+    <string name="qr_scanned">已扫码，请在手机上确认</string>
+    <string name="qr_success">登录成功</string>
+    <string name="qr_expired">二维码已过期，请重新获取</string>
+    <string name="qr_failed">获取二维码失败</string>
+    <string name="qr_open_browser">在浏览器打开登录页</string>
+    <string name="qr_refresh">刷新二维码</string>
+    <string name="qr_close">关闭</string>
+    <string name="qr_manual_hint">扫不出来？点「在浏览器打开登录页」登录，再用「粘贴并解析 Cookie」。</string>
+
+    <!-- ============ 新增开关 ============ -->
+    <string name="cb_buffer">先把整条音频缓冲到本地再播放（更稳、拖动进度更准）</string>
+    <string name="cb_compat">兼容模式：强制走 player_play_url（忽略型号白名单，排查用）</string>
+    <string name="cb_auto_self_heal">连续登录失败时自动重启投屏链路（自愈）</string>
+    <string name="btn_restart_service">热重启投屏服务（改配置后不用重开 App）</string>
+    <string name="toast_restarted">已热重启投屏服务</string>
+    <string name="toast_restart_need_running">服务没在运行，直接点「启动投屏服务」即可</string>
+    <string name="cb_buffer_need_restart">切换缓冲模式需重启服务后生效</string>
+    <string name="self_heal_none">尚未触发自愈</string>
+</resources>

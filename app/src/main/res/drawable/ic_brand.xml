@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 小爱DLNA 品牌标：经典投屏（cast）符号 —— 屏幕轮廓 + 波纹 + 圆点 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- 屏幕轮廓：左下角让位给波纹 -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M11,16.6 H18.2 A2.4,2.4 0 0 0 20.6,14.2 V7 A2.4,2.4 0 0 0 18.2,4.6 H5.8 A2.4,2.4 0 0 0 3.4,7 V9"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="1.9" />
+
+    <!-- 近场波纹 -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M3.4,12.2 A4.4,4.4 0 0 1 7.8,16.6"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.9" />
+
+    <!-- 远场波纹 -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M3.4,9 A7.6,7.6 0 0 1 11,16.6"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.9" />
+
+    <!-- 投屏源点 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M3.4,16.6 m-1.5,0 a1.5,1.5 0 1 0 3,0 a1.5,1.5 0 1 0 -3,0" />
+</vector>
