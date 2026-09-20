@@ -63,6 +63,9 @@ class CastService : Service() {
          */
         private const val MEDIA_IDLE_TIMEOUT_SEC = 30L
 
+        /** 音箱状态轮询间隔：2s，兼顾及时性与云端请求频率 */
+        private const val STATUS_POLL_INTERVAL_MS = 2_000L
+
         @Volatile
         private var _running = false
         val running: Boolean get() = _running
@@ -100,6 +103,9 @@ class CastService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var multicastLock: WifiManager.MulticastLock? = null
     private var watchdog: Job? = null
+
+    /** 音箱状态轮询协程：喂给渲染器做播放确认 / 进度对齐 / 结束检测 */
+    private var statusPoller: Job? = null
 
     /** 上次自愈重启的时间戳，用于看门狗退避 */
     @Volatile
@@ -249,6 +255,7 @@ class CastService : Service() {
         }
 
         startWatchdog()
+        startStatusPoller()
     }
 
     /**
@@ -280,9 +287,39 @@ class CastService : Service() {
         startEverything()
     }
 
+    /**
+     * 音箱状态轮询：每 2s 拉一次小米云端播放状态，喂给渲染器。
+     *
+     * 渲染器据此完成三件事：① 播放确认（没播起来就补发，治"手机在放音箱哑"）；
+     * ② 进度锚定（手机显示跟音箱实际播放对齐）；③ 结束检测（切下一首 / 广播 STOPPED）。
+     */
+    private fun startStatusPoller() {
+        statusPoller?.cancel()
+        statusPoller = scope.launch {
+            while (isActive) {
+                delay(STATUS_POLL_INTERVAL_MS)
+                if (!_running) continue
+                val sp = speaker ?: continue
+                val rend = renderer ?: continue
+                val st = try {
+                    sp.getStatus()
+                } catch (_: Throwable) {
+                    null
+                }
+                try {
+                    rend.reportSpeakerStatus(st)
+                } catch (t: Throwable) {
+                    LogBus.w("状态轮询处理异常：${t.message}")
+                }
+            }
+        }
+    }
+
     private fun teardown() {
         watchdog?.cancel()
         watchdog = null
+        statusPoller?.cancel()
+        statusPoller = null
         if (!_running && server == null && ssdp == null) {
             releaseLocks()
             return

@@ -14,7 +14,7 @@
 
 ![platform](https://img.shields.io/badge/platform-Android%208.0%2B-3ddc84)
 ![kotlin](https://img.shields.io/badge/Kotlin-2.2.0-7f52ff)
-![version](https://img.shields.io/badge/version-0.2.3-1A73E8)
+![version](https://img.shields.io/badge/version-0.2.4-1A73E8)
 [![download](https://img.shields.io/github/v/release/dawuZZZ/XiaoaiCast-Pro?label=download%20APK&color=1A73E8&sort=semver)](https://github.com/dawuZZZ/XiaoaiCast-Pro/releases/latest)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
@@ -90,6 +90,19 @@
 | **Compose UI** | 三屏骨架落地为 6 个页面，单 Activity + 轻量返回栈；设计 tokens 集中在 `ui/theme/Theme.kt` | `ui/`、`ui/screens/` |
 
 原有能力（SSDP 应答器、UPnP HTTP 服务、DLNA 渲染器状态机、GENA 事件订阅、小米云控制、前台服务保活、一键自检）原样保留。
+
+### v0.2.4 变更（投屏启动稳定性与播放同步）
+
+| 变更 | 说明 |
+|---|---|
+| 首投稳定性 | 原来只要小米云 API 返回成功就置为"播放中"，**从不确认音箱是否真的开始放**；现改为下发后由状态轮询确认，音箱未进入播放就自动补发播放命令（最多 3 次），治"手机已经在放、音箱没声" |
+| 冷启动登录竞态 | 下发播放前先确保登录态就绪，避免"首投"与"取 token"抢跑导致首启失败 |
+| 进度与音箱对齐 | 进度改为**以音箱上报的真实播放位置为锚点**、本机时钟补间——手机显示不再领先音箱实际播放；部分固件对流式 URL 不上报位置时自动退回本机估算（不会卡在 0） |
+| 曲末不再死循环 | 曲末**无条件补一次 stop**：L05B 这类固件把同一 URL 放完会自己从头重播（表现为"最后一句歌词反复放"），而它此刻往往不上报"正在播放"，只按状态判断会漏停 |
+| 自动连播下一首 | 两条路都通：① **`SetNextAVTransportURI` 预置**——QPlay / QQ音乐 把下一首预置给渲染器，曲末由渲染器自动接上；② **曲末广播 `STOPPED`**（位置停在曲长、不归零）——由控制点自己切下一首，**网易云音乐实测走的就是这条** |
+| 曲末判定 | 以**本机时钟推进到曲长**为主判据（音箱不上报位置时唯一可靠的"到头"信号），辅以"连续两次已停止"；"位置回绕"仅在音箱**可信上报位置**时才启用——否则会被恒报 0 的固件误判成重播而误停播放 |
+| 投屏状态与界面同步 | 修「点下一首后界面停在暂停、音箱其实已在播」。两处根因：① **GENA 事件不分服务**——RenderingControl 的订阅者收到的是 AVTransport 命名空间的事件、且混入越界的 `Volume`，严格的解析器（网易云）会整条丢弃；现按订阅的服务分别生成 `LastChange`（AVT 只带 `TransportState`、RCS 只带 `Volume`），订阅时记录服务类型。② 原来会广播 `TRANSITIONING` 过渡态，控制点容易画成"暂停/加载"；现对外只呈现 `STOPPED → PLAYING` 的干净序列，并在音箱**确认进入播放**后补发一次 `PLAYING` 做幂等纠偏 |
+| 音箱状态轮询 | 新增 2s 一次的音箱状态轮询，为上述三件事提供统一数据源（`CastService`）。热重启/自愈重启会正确回收该协程 |
 
 ### v0.2.3 变更（应用更名与版本号收口）
 
@@ -237,13 +250,13 @@ UPnP 的事件订阅能力等于不存在——网易云靠轮询还能凑合，
 |---|---|---|
 | SSDP 应答器 | `dlna/SsdpResponder.kt` | 监听 `239.255.255.250:1900`，回复 M-SEARCH，让音乐 App 发现"设备" |
 | UPnP HTTP 服务 | `dlna/UpnpHttpServer.kt` | 设备描述 / SOAP 控制 / GENA 事件订阅 / 音频流代理 |
-| DLNA 渲染器 | `dlna/UpnpRenderer.kt` | 渲染器状态机，把指令翻译成小米云调用 |
+| DLNA 渲染器 | `dlna/UpnpRenderer.kt` | 渲染器状态机，把指令翻译成小米云调用；播放确认 / 进度锚定 / 结束切歌 / 预置下一首 |
 | 音频代理 | `dlna/MediaProxy.kt` | 直接透传，或交给缓冲层；Range / seek 字节偏移 |
 | 音频缓冲 | `dlna/MediaBuffer.kt` | 渐进式落盘到本地文件再供给音箱，抗 CDN 抖动 |
 | 小米云 | `xiaomi/MiAccount.kt`、`xiaomi/MiNaClient.kt` | 登录（密码 / passToken / 扫码）与播放控制 |
 | 登录保护 | `xiaomi/LoginGuard.kt` | 失败限速 + 连续失败自愈计数 |
 | 型号分派 | `xiaomi/DeviceCatalog.kt` | 按机型决定 music / url 接口 |
-| 前台服务 | `CastService.kt` | 编排链路 + WakeLock/MulticastLock 保活 + 热重启 + 自愈看门狗 |
+| 前台服务 | `CastService.kt` | 编排链路 + WakeLock/MulticastLock 保活 + 热重启 + 自愈看门狗 + 音箱状态轮询 |
 
 ---
 
@@ -305,7 +318,7 @@ XiaoaiCast-Pro/
 ### 直接安装 APK
 
 到 **[Releases](https://github.com/dawuZZZ/XiaoaiCast-Pro/releases/latest)** 页下载
-`XiaoaiCast-Pro-v0.2.3-release.apk` 安装（需允许未知来源）。
+`XiaoaiCast-Pro-v0.2.4-release.apk` 安装（需允许未知来源）。
 
 > 同页还挂了一个 `-debug.apk`：包名带 `.debug` 后缀、用 Android Debug key 签名，
 > 与正式包**共存不冲突**，日志更全，排查问题时用它。
@@ -446,7 +459,23 @@ NanoHTTPD 的 `DefaultAsyncRunner` 是**每个请求开一个线程**。所以�
 
 ---
 
-## 十二、已知限制
+## 十二、界面截图（真机实测）
+
+| 主界面 | 音箱列表 |
+|---|---|
+| ![主界面](docs/screenshots/01-home.png) | ![音箱列表](docs/screenshots/04-devices.png) |
+
+| 账号 | 设置 |
+|---|---|
+| ![账号](docs/screenshots/02-account.png) | ![设置](docs/screenshots/03-settings.png) |
+
+| 扫码登录（二维码按屏幕宽度铺满，方便扫） |
+|---|
+| ![扫码登录](docs/screenshots/05-qr-login.png) |
+
+---
+
+## 十三、已知限制
 
 | 限制 | 说明 |
 |---|---|
@@ -457,10 +486,12 @@ NanoHTTPD 的 `DefaultAsyncRunner` 是**每个请求开一个线程**。所以�
 | 缓冲模式起播 | 已改渐进式供给（落盘 64KB 即开始回数据），但 CDN 极慢时首段等待会拉长 |
 | 手机得活着 | 前台服务 + WakeLock + 电池白名单都做了，部分国产 ROM 仍可能杀后台，建议锁定后台任务 |
 | 同一时间只服务一个投送端 | 换歌会复用同一条链路；多端同时投送的行为未做专门处理 |
+| **自动连播** | 曲末时渲染器把播放位置**停在曲长**（不归零）并广播 `STOPPED`，由控制点决定接不接下一首。**网易云音乐实测可自动连播**——实测它收到 `STOPPED` 后半秒内就下发下一首 `SetAVTransportURI` + `Play` 接管；QQ音乐 / QPlay 则走 `SetNextAVTransportURI` 预置那条路。若控制点本身不做连播，播放会停在曲末 |
+| **QQ音乐 须与本 App 分处两台设备** | QQ音乐的 DLNA 发现会**过滤掉与自身同 IP 的渲染器**。所以 QQ音乐 和 小爱DLNA 装在**同一台手机**时，QQ音乐会搜不到本设备（实测：同一路由下分处两台设备即可正常投放）。网易云没有这个限制，同机可用 |
 
 ---
 
-## 十三、免责声明
+## 十四、免责声明
 
 - 本项目**仅供个人学习与自用**，不得用于任何商业用途。
 - 控制音箱需要向小米云提交账号凭据（密码或 passToken）。**请勿使用绑定摄像头等敏感设备的账号**，

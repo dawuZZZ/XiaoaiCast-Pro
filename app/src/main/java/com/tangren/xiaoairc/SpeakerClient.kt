@@ -3,6 +3,8 @@ package com.tangren.xiaoairc
 import com.tangren.xiaoairc.xiaomi.DeviceCatalog
 import com.tangren.xiaoairc.xiaomi.MiAccount
 import com.tangren.xiaoairc.xiaomi.MiNaClient
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 
 /**
@@ -43,6 +45,11 @@ class SpeakerClient(
         )
 
     suspend fun playUrl(url: String): Boolean {
+        // 冷启动/首启：先确保登录态就绪，避免"下发播放"与"取 token"竞态导致首投失败
+        // （minaRequest 内部虽也会自动登录，但显式前置让时序更稳、日志更清晰）
+        if (!account.loggedIn) {
+            runCatching { account.login() }
+        }
         if (tryPlay(url)) return true
         LogBus.w("播放请求失败，重新登录后再试一次…")
         if (account.relogin() && tryPlay(url)) return true
@@ -76,6 +83,22 @@ class SpeakerClient(
     suspend fun pause(): Boolean = hardStop("暂停")
 
     suspend fun stop(): Boolean = hardStop("停止")
+
+    /**
+     * 只下发、不等云端确认的"快速停止"。
+     *
+     * 曲末时用来抢时间：音箱把一条流读完就会回头重放本曲，而 [stop] 走的是
+     * "下发 + 轮询云端状态确认"那条路（实测要 3~7 秒），等它确认完，音箱早把最后几句
+     * 重放完了。这里只发命令（几百毫秒），确认那步留给 [stop] 兜底。
+     */
+    suspend fun stopFast(): Boolean = coroutineScope {
+        // 两条命令**并发**下发（串行要 ~1.2s，并发砍一半）——曲末抢的就是这点时间
+        val paused = async { na.playOperation(deviceId, "pause") }
+        val stopped = async { na.playOperation(deviceId, "stop") }
+        val ok = paused.await() && stopped.await()
+        LogBus.i("快速停止已下发（${if (ok) "成功" else "部分失败"}）")
+        ok
+    }
 
     /** pause + stop 双发，然后轮询云端状态确认，最多补 2 次。 */
     private suspend fun hardStop(what: String): Boolean {

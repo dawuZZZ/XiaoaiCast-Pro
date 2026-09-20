@@ -13,6 +13,8 @@ import org.w3c.dom.Element
 import org.w3c.dom.Node
 import java.io.ByteArrayInputStream
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import javax.xml.parsers.DocumentBuilderFactory
 import java.util.UUID
@@ -29,7 +31,13 @@ class UpnpHttpServer(
     private val proxy: MediaProxy
 ) : NanoHTTPD(port) {
 
-    private data class Subscription(val callback: String, var expireAt: Long, var seq: Int = 0)
+    private data class Subscription(
+        val callback: String,
+        /** 订阅的是哪个服务：决定事件体的命名空间与内容（AVT 只有状态、RCS 只有音量） */
+        val service: String,
+        var expireAt: Long,
+        var seq: Int = 0
+    )
 
     private val subscriptions = ConcurrentHashMap<String, Subscription>()
 
@@ -37,6 +45,21 @@ class UpnpHttpServer(
         .connectTimeout(3, TimeUnit.SECONDS)
         .readTimeout(3, TimeUnit.SECONDS)
         .build()
+
+    /**
+     * GENA 通知的发送队列（单线程、按序）。
+     *
+     * 状态变化可能在毫秒级连发多条（切歌时 STOPPED→TRANSITIONING→PLAYING），
+     * 若每条各起一个线程并发发，到达控制点的顺序就不确定了——控制点很可能
+     * 最后收到的是较早的状态（比如把界面停在"暂停"）。串行化保证按发生顺序送达。
+     */
+    private val notifyExecutor: ExecutorService = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "gena-notify").apply { isDaemon = true }
+    }
+
+    /** GetPositionInfo 的日志节流（控制点会以十几 Hz 轮询，全打会淹没日志） */
+    @Volatile
+    private var lastPosLogAt: Long = 0L
 
     override fun serve(session: IHTTPSession): Response {
         val uri = session.uri
@@ -46,13 +69,19 @@ class UpnpHttpServer(
         return try {
             when {
                 uri == "/" -> infoPage()
-                uri == "/device/$udn/description.xml" ->
+                uri == "/device/$udn/description.xml" -> {
+                    LogBus.i("控制端拉取设备描述：${clientTag(session)}")
                     xml(UpnpConst.deviceDescriptionXml(udn, renderer.friendlyName))
-                uri.startsWith("/device/$udn/") && uri.endsWith(".xml") -> scpd(uri)
+                }
+                uri.startsWith("/device/$udn/") && uri.endsWith(".xml") -> scpd(uri, session)
                 uri.endsWith("/control") -> control(session)
                 uri.endsWith("/event") -> event(session, method)
                 uri.startsWith("/media/") -> media(session)
-                else -> notFound()
+                else -> {
+                    // 控制端若在找我们不提供的资源（QPlay 有时会探特定路径），这里能看到
+                    LogBus.w("收到未知请求：$method $uri  ${clientTag(session)}")
+                    notFound()
+                }
             }
         } catch (t: Throwable) {
             LogBus.e("HTTP 处理异常 $uri: ${t.message}")
@@ -60,6 +89,17 @@ class UpnpHttpServer(
                 Response.Status.INTERNAL_ERROR, "text/plain", "server error: ${t.message}"
             )
         }
+    }
+
+    /** 请求方标识：用于定位是哪个音乐 App 在访问、卡在哪一步 */
+    private fun clientTag(session: IHTTPSession): String {
+        val ip = try {
+            session.remoteIpAddress
+        } catch (_: Throwable) {
+            null
+        } ?: "?"
+        val ua = session.headers["user-agent"] ?: session.headers["User-Agent"] ?: "?"
+        return "ip=$ip ua=${ua.take(90)}"
     }
 
     // ------------------------------------------------------------------
@@ -89,7 +129,7 @@ class UpnpHttpServer(
         NanoHTTPD.newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "not found")
 
     /** 服务描述（SCPD）：直接从 MiAir 的模板搬过来放在 res/raw 里。 */
-    private fun scpd(uri: String): Response {
+    private fun scpd(uri: String, session: IHTTPSession): Response {
         val name = uri.substringAfterLast('/')
         val resId = when (name) {
             "AVTransport.xml" -> R.raw.avtransport_scpd
@@ -97,6 +137,7 @@ class UpnpHttpServer(
             "ConnectionManager.xml" -> R.raw.connection_manager_scpd
             else -> return notFound()
         }
+        LogBus.i("控制端拉取 SCPD：$name  ${clientTag(session)}")
         val text = context.resources.openRawResource(resId).use {
             it.readBytes().toString(Charsets.UTF_8)
         }
@@ -201,8 +242,18 @@ class UpnpHttpServer(
                 ) to 500
             }
 
+            // QPlay/QQ音乐 会先把下一首预置进来，渲染器在曲末自动接上。
+            // 之前这里是空操作 → 曲末无人切歌、音箱把同一首循环，是"不跳下一首"的主因。
+            "SetNextAVTransportURI" -> {
+                renderer.setNextAvTransportUri(
+                    params["NextURI"] ?: "",
+                    params["NextURIMetaData"] ?: ""
+                )
+                UpnpConst.soapResponse(UpnpConst.AVTRANSPORT_URN, action, emptyMap()) to 200
+            }
+
             // 换歌由控制端重新下发 SetAVTransportURI 完成，这里直接回成功
-            "Next", "Previous", "SetNextAVTransportURI", "SetPlayMode",
+            "Next", "Previous", "SetPlayMode",
             "GetDeviceCapabilities" -> UpnpConst.soapResponse(
                 UpnpConst.AVTRANSPORT_URN, action,
                 if (action == "GetDeviceCapabilities") mapOf(
@@ -221,9 +272,12 @@ class UpnpHttpServer(
                 UpnpConst.AVTRANSPORT_URN, action, renderer.getTransportInfo()
             ) to 200
 
-            "GetPositionInfo" -> UpnpConst.soapResponse(
-                UpnpConst.AVTRANSPORT_URN, action, renderer.getPositionInfo()
-            ) to 200
+            "GetPositionInfo" -> {
+                logPositionInfo()
+                UpnpConst.soapResponse(
+                    UpnpConst.AVTRANSPORT_URN, action, renderer.getPositionInfo()
+                ) to 200
+            }
 
             "GetMediaInfo" -> UpnpConst.soapResponse(
                 UpnpConst.AVTRANSPORT_URN, action, renderer.getMediaInfo()
@@ -334,9 +388,17 @@ class UpnpHttpServer(
                     Response.Status.BAD_REQUEST, "text/plain", "missing CALLBACK"
                 )
                 val callback = callbackRaw.trim().removePrefix("<").removeSuffix(">")
+                val service = when {
+                    session.uri.contains("/AVTransport/") -> UpnpConst.SERVICE_AVT
+                    session.uri.contains("/RenderingControl/") -> UpnpConst.SERVICE_RCS
+                    session.uri.contains("/ConnectionManager/") -> UpnpConst.SERVICE_CM
+                    else -> UpnpConst.SERVICE_AVT
+                }
                 val newSid = "uuid:" + UUID.randomUUID().toString()
-                subscriptions[newSid] = Subscription(callback, System.currentTimeMillis() + SUB_TIMEOUT_MS)
-                LogBus.i("新事件订阅：$callback")
+                subscriptions[newSid] = Subscription(
+                    callback, service, System.currentTimeMillis() + SUB_TIMEOUT_MS
+                )
+                LogBus.i("新事件订阅：$service  $callback")
                 // 订阅成功后必须立刻推一次初始状态，否则控制端认为设备不响应
                 broadcastState()
                 return NanoHTTPD.newFixedLengthResponse(Response.Status.OK, "text/xml", "").apply {
@@ -359,14 +421,27 @@ class UpnpHttpServer(
         }
     }
 
-    /** 状态变化时向所有订阅者推 LastChange。 */
+    /**
+     * 状态变化时向所有订阅者推 LastChange。
+     *
+     * 状态在**这里取快照**再交给发送线程：发送是异步的，如果在发送时才读
+     * `renderer.transportState`，等到真正发出去时状态可能已经翻到下一条了
+     * （切歌时 STOPPED→PLAYING 只隔几百毫秒），控制点收到的就不是这条事件该有的状态。
+     */
     fun broadcastState() {
         if (subscriptions.isEmpty()) return
-        val body = UpnpConst.lastChangeEvent(renderer.transportState, renderer.currentVolume())
+        val state = renderer.transportState
+        val volume = renderer.currentVolume()
         val snapshot = subscriptions.entries.map { it.key to it.value }
-        Thread {
+        notifyExecutor.execute {
             for ((sid, sub) in snapshot) {
                 sub.seq += 1
+                // 每个服务的 LastChange 命名空间/内容都不同，按订阅者的服务分别生成
+                val body = when (sub.service) {
+                    UpnpConst.SERVICE_RCS -> UpnpConst.lastChangeRcs(volume)
+                    UpnpConst.SERVICE_CM -> UpnpConst.lastChangeCm()
+                    else -> UpnpConst.lastChangeAvt(state)
+                }
                 try {
                     val req = Request.Builder()
                         .url(sub.callback)
@@ -377,11 +452,35 @@ class UpnpHttpServer(
                         .header("SEQ", sub.seq.toString())
                         .method("NOTIFY", body.toRequestBody(XML_CT))
                         .build()
-                    notifyClient.newCall(req).execute().close()
-                } catch (_: Throwable) {
+                    val resp = notifyClient.newCall(req).execute()
+                    val code = resp.code
+                    resp.close()
+                    if (code !in 200..299) {
+                        LogBus.w("事件通知被控制点拒绝：${sub.service} $sid code=$code（状态=$state）")
+                    } else {
+                        // 逐条记服务与状态：切歌时能看清控制点最终收到的是哪一条
+                        LogBus.i("已通知控制点：${sub.service} $state  $sid code=$code")
+                    }
+                } catch (t: Throwable) {
+                    LogBus.w("事件通知发送失败：${sub.service} $sid ${t.message}")
                 }
             }
-        }.start()
+        }
+    }
+
+    /**
+     * 控制点（网易云）主要靠 RelTime / TrackDuration 判断进度和"是否到头"，
+     * 这里节流打一条便于核对（它约十几 Hz 轮询，全打会淹没日志）。
+     */
+    private fun logPositionInfo() {
+        val now = System.currentTimeMillis()
+        if (now - lastPosLogAt < 3_000L) return
+        lastPosLogAt = now
+        LogBus.i(
+            "位置上报：RelTime=${renderer.formatTime(renderer.positionSec())}" +
+                " / TrackDuration=${renderer.formatTime(renderer.durationSec)}" +
+                "  state=${renderer.transportState}"
+        )
     }
 
     private fun pruneExpired() {
@@ -393,16 +492,37 @@ class UpnpHttpServer(
     // 音频流代理
     // ------------------------------------------------------------------
 
+    /**
+     * 这次取流是不是"从头要整首"（无 Range，或 `bytes=0-`）。
+     * 曲末之后，这种请求就等同于"重播本曲"——见 [MediaProxy.Entry.ended]。
+     */
+    private fun isRestartFromHead(range: String?): Boolean {
+        if (range.isNullOrBlank()) return true
+        val spec = range.trim().lowercase().removePrefix("bytes=").split(",").first().trim()
+        return spec.split("-").firstOrNull()?.toLongOrNull() == 0L
+    }
+
     private fun media(session: IHTTPSession): Response {
         val token = session.uri.removePrefix("/media/").substringBefore('/')
         val entry = proxy.peek(token)
-            ?: return NanoHTTPD.newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "token 不存在")
+            ?: return NanoHTTPD.newFixedLengthResponse(
+                Response.Status.NOT_FOUND, "text/plain", "token 不存在"
+            )
 
         val isHead = session.method == NanoHTTPD.Method.HEAD
         val range = session.headers["range"]
         LogBus.i(
             "音箱来取流：$token  range=${range ?: "无"}${if (isHead) "（HEAD）" else ""}"
         )
+
+        // 曲末/停止后，音箱常拿同一个 token 再从 0 重拉一遍；token 带 seek 偏移，
+        // 听感上就是"重播最后几句"。这种"从头请求"一律拒掉，续传请求仍放行。
+        if (entry.ended && isRestartFromHead(range)) {
+            LogBus.i("拒绝重播请求：$token（本曲已结束，音箱在从头重拉）")
+            return NanoHTTPD.newFixedLengthResponse(
+                Response.Status.NOT_FOUND, "text/plain", "本曲已结束"
+            )
+        }
 
         // HEAD 也走真实探测：把源站的长度/Range 信息如实转给音箱，
         // 部分播放器（含 QQ 音乐）先 HEAD 探测再决定怎么取流，残缺的 HEAD 会让它拿不到关键信息

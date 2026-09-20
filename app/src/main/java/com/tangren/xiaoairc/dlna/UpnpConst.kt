@@ -126,24 +126,47 @@ $bodyBlock    </u:${action}Response>
   </s:Body>
 </s:Envelope>"""
 
-    /** GENA 事件通知体：LastChange 里的内容整体转义，这是标准做法 */
-    fun lastChangeEvent(transportState: String, volume: Int): String {
-        val parts = StringBuilder()
-        if (transportState.isNotEmpty()) {
-            parts.append("""<TransportState val="$transportState"/>""")
-        }
-        if (volume >= 0) {
-            parts.append("""<Volume channel="Master" val="$volume"/>""")
-        }
-        val inner = """<Event xmlns="urn:schemas-upnp-org:metadata-1-0/AVT/">""" +
-            """<InstanceID val="0">$parts</InstanceID></Event>"""
-        return """<?xml version="1.0" encoding="utf-8"?>
+    /**
+     * GENA 事件通知体：LastChange 里的内容整体转义，这是标准做法。
+     *
+     * **必须按服务分开生成**：每个服务的 LastChange 有自己的命名空间，
+     * AVTransport 的事件里只能有 TransportState，Volume 属于 RenderingControl。
+     * 之前两种订阅共用一份"AVT 命名空间 + 混入 Volume"的事件体，控制点
+     * （网易云）解析这种越界结构时会出问题。
+     */
+    fun lastChangeAvt(transportState: String): String = wrapLastChange(
+        """<Event xmlns="$AVT_EVENT_NS"><InstanceID val="0">""" +
+            """<TransportState val="$transportState"/>""" +
+            """</InstanceID></Event>"""
+    )
+
+    fun lastChangeRcs(volume: Int): String = wrapLastChange(
+        """<Event xmlns="$RCS_EVENT_NS"><InstanceID val="0">""" +
+            """<Volume channel="Master" val="$volume"/>""" +
+            """</InstanceID></Event>"""
+    )
+
+    fun lastChangeCm(): String = wrapLastChange(
+        """<Event xmlns="$CM_EVENT_NS"><InstanceID val="0">""" +
+            """<CurrentConnectionIDs val="0"/>""" +
+            """</InstanceID></Event>"""
+    )
+
+    private fun wrapLastChange(inner: String): String = """<?xml version="1.0" encoding="utf-8"?>
 <e:propertyset xmlns:e="urn:schemas-upnp-org:event-1-0">
   <e:property>
     <LastChange>${esc(inner)}</LastChange>
   </e:property>
 </e:propertyset>"""
-    }
+
+    /** 事件订阅的服务类型 */
+    const val SERVICE_AVT = "AVTransport"
+    const val SERVICE_RCS = "RenderingControl"
+    const val SERVICE_CM = "ConnectionManager"
+
+    private const val AVT_EVENT_NS = "urn:schemas-upnp-org:metadata-1-0/AVT/"
+    private const val RCS_EVENT_NS = "urn:schemas-upnp-org:metadata-1-0/RCS/"
+    private const val CM_EVENT_NS = "urn:schemas-upnp-org:metadata-1-0/CM/"
 
     fun esc(s: String): String = s
         .replace("&", "&amp;")

@@ -35,6 +35,19 @@ class MediaProxy(
 
         @Volatile
         var mime: String = "audio/mpeg"
+
+        /**
+         * 本曲是否已结束。**只由"曲末 / 停止 / 换歌"置位**（见 [markEnded]）。
+         *
+         * 置位后只拦"从头重拉"的请求：曲末时音箱往往已经在回绕重放本曲，而 token 带
+         * seek 偏移（拖到 2:27 起播就只剩最后那段），重放就变成"把最后几句又放一遍"。
+         * 拒掉它的重拉请求，音箱拿不到数据就停了。
+         *
+         * ⚠️ 千万不能反过来用"响应覆盖到流末尾"去推断"它要重播了"：L05B 在**正常播放中**
+         * 就会频繁交替请求 `bytes=0-` 与 `bytes=<末尾>-`，那样会把正常取流也拒掉（实测直接没声）。
+         */
+        @Volatile
+        var ended: Boolean = false
     }
 
     data class ProxyResponse(
@@ -89,6 +102,16 @@ class MediaProxy(
 
     fun peek(token: String): Entry? = entries[token]
 
+    /**
+     * 标记某条流"本曲已结束"，用于拦截音箱的回绕重播（详见 [Entry.ended]）。
+     *
+     * 与 stop 相比这是**瞬时**生效的：stop 走"下发 + 查云端状态确认"那条路，实测要 3~7 秒，
+     * 根本拦不住音箱回绕的那一瞬；而拒掉它的重拉请求，它拿不到数据就只能停。
+     */
+    fun markEnded(token: String) {
+        entries[token]?.ended = true
+    }
+
     fun pathFor(token: String): String = "/media/$token"
 
     private fun ensureBuffer(url: String): MediaBuffer? {
@@ -111,6 +134,11 @@ class MediaProxy(
     /**
      * 向源站发起请求。
      * @param virtualRange 客户端请求的范围（相对于"虚拟起点"，即 entry.offset 之后的内容）
+     *
+     * 注意：**不要**用"本次响应覆盖到流末尾"去推断"这一遍读完了"。
+     * 实测 L05B 在**正常播放中**就会频繁交替请求 `bytes=0-` 和 `bytes=<末尾>-`（预读/探测），
+     * 那样一置位 [Entry.ended] 就把它后续的 `bytes=0-` 全部拒掉 → 音箱直接没声。
+     * `ended` 只能由"曲末 / 停止 / 换歌"这类**我们确知播放真的结束了**的时机来置位。
      */
     fun request(entry: Entry, virtualRange: String?, headOnly: Boolean): ProxyResponse? {
         if (bufferFactory != null) {
