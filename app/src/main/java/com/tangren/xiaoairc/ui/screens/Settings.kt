@@ -81,8 +81,8 @@ fun SettingsScreen(s: AppState, scope: CoroutineScope) {
                 ACard(padding = 0.dp) {
                     SettingSwitchRow(
                         icon = Icons.Filled.PlayArrow,
-                        title = "使用 player_play_music 接口",
-                        subtitle = "L05B / L05C / LX05 等机型必需；未手动改过时按型号自动分派",
+                        title = "使用 music 接口",
+                        subtitle = "即 player_play_music；L05B / L05C / LX05 等机型必需，未手动改过时按型号自动分派",
                         checked = s.useMusicApi
                     ) { s.useMusicApi = it; s.musicApiExplicit = true; s.persistConfig() }
                     ARowDivider()

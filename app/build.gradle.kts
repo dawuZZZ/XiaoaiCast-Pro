@@ -52,7 +52,11 @@ android {
             }
         }
         debug {
+            // 与 release 包共存，便于真机调试时抓 logcat 而不覆盖正式版
             applicationIdSuffix = ".debug"
+            // 调试版显示名加标记：两者的显示名原本都是「小爱DLNA」，
+            // 桌面会并排出现两个完全同名同图的图标，装机后根本分不清哪个是哪个。
+            resValue("string", "app_name", "小爱DLNA·调试")
         }
     }
 

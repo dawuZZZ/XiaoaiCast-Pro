@@ -13,3 +13,6 @@ local.properties
 *.keystore
 *.jks
 !debug.keystore
+
+# UI B 液态玻璃实验代码暂存（未编译验证，不参与构建与提交）
+/.wip-uiB/

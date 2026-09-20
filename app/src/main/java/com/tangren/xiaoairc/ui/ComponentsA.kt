@@ -414,27 +414,37 @@ fun AXTextField(
     numeric: Boolean = false,
     password: Boolean = false
 ) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label, fontSize = 12.sp) },
-        singleLine = true,
-        shape = RoundedCornerShape(12.dp),
-        visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
-        keyboardOptions = KeyboardOptions(
-            keyboardType = when {
-                numeric -> KeyboardType.Number
-                password -> KeyboardType.Password
-                else -> KeyboardType.Text
-            }
-        ),
-        textStyle = MaterialTheme.typography.bodyMedium,
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = Xc.Accent,
-            unfocusedBorderColor = Color.Transparent,
-            focusedContainerColor = Xc.InputBg,
-            unfocusedContainerColor = Xc.InputBg
-        ),
-        modifier = modifier.fillMaxWidth()
-    )
+    // 用独立的固定标签 + 无 label 的输入框，而不是 OutlinedTextField 的 floating label：
+    // 本项目输入框 borderColor 设成了透明（无边框外观），floating label 在有值时会上浮到
+    // 「本该有边框」的位置，看起来悬空、与输入区脱节。固定标签则始终贴在框内顶部。
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            label,
+            fontSize = 12.sp,
+            color = Xc.TextSecondary,
+            modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
+        )
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp),
+            visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = when {
+                    numeric -> KeyboardType.Number
+                    password -> KeyboardType.Password
+                    else -> KeyboardType.Text
+                }
+            ),
+            textStyle = MaterialTheme.typography.bodyMedium,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Xc.Accent,
+                unfocusedBorderColor = Color.Transparent,
+                focusedContainerColor = Xc.InputBg,
+                unfocusedContainerColor = Xc.InputBg
+            ),
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
 }
